@@ -1,0 +1,165 @@
+# mongodb使用方法
+# author:<jspankai@vip.qq.com>
+
+1 创建数据库
+use mydb//没有就创建
+
+2 显示数据库
+show dbs
+
+3 显示数据库的状态
+db.stats()
+
+4 检查当前所用的数据库
+db
+
+5 删除数据库（先用然后删除）
+use mydb
+db.dropDatabase()
+
+6 在数据库中创建集合(mycol为集合名称)
+    a.  db.createCollection('mycol')    //创建默认集合
+    db.mycol.insert({id:1,name:'张三',age:20})
+    db.mycol.find({})
+    db.mycol.insert({_id:'aa',name:'李四',age:20})
+    b.  db.createCollection("mycol",{capped:true,autoIndexID:true,size:6142800,max:10000}) //创建指定参数集合
+    指定参数：
+    capped true 启用封顶集合，固定大小的集合，会自动覆盖最早的条目，如果true，也需要指定尺寸参数
+    size number 指定最大字节封顶集合，如果封顶为true，需要指定这个字段
+    max number  指定封顶集合最大数量，最高多少条记录
+    autoIndexID true 则_id字段自动创建索引，默认false，慎用false，因为会导致同步数据时负载很高，建议true
+
+7 直接插入数据创建集合
+db.teacher.insert({'draven':'node'})
+//自动创建名为teacher的数据集，里面有一条键值对
+
+8 显示集合
+show collections
+
+9 删除集合
+db.mycol.drop()
+
+10 删除集合数据
+db.mycol.remove({})
+
+11 显示表格记录
+db.mycol.find({})
+
+数据类型和嵌套关联
+
+//多条插入
+db.mycol.insert([{},{},{}])
+
+//覆盖保存，没有则插入，有则覆盖
+db.user.save({})
+
+//插入时间
+db.test.insert({time:new Date()})
+给mongodb插入日期的数据时发现，日期时间相差8小时，原来存储在mongodb中的时间UTC+0:00,而中国的时区是+8.00
+
+取出时正确
+db.test.find()[0].time.getHours()
+
+//保证正确的插入方式
+new Date(2017,7,28,21,45,30) //2017-7-28 21:45:30
+
+用自定义函数：
+function getFormateDate(time){
+    year = time.getFullYear();
+    mon = time.getMonth()+1;
+    date = time.getDate();
+    hour = time.getHours();
+    min = time.getMinutes();
+    sec = time.getSeconds();
+    newtime = year+'-'+mon+'-'+date+' '+hour+':'+min+':'+sec;
+    return newtime;
+}
+
+getFormateDate(new Date())
+getFormateDate(db.user.find()[4].creattime)
+
+修改数据
+db.user.update({email:'aa'},{$set:{pwd:'bb'}}) //只能改第一条
+db.user.update({email:'aa'},{$set:{pwd:'bb'}},{multi:true}) //允许多条
+$unset  删除字段
+db.user.update({email:'aa'},{$unset:{pwd:'bb'}}) //删除pwd:'bb'字段
+$inc    在原先基础上加一个数
+db.user.update({email:'aa'},{$inc:{money:15}},{multi:true}) //email为aa的，每人加15块钱
+$push
+{$push:{field:value}}
+把value追加到field里面去。field一定是数组类型才行，如果field不存在，会新增一个数组类型加进去
+$pushAll
+{$pushAll:{field:value_array}}
+同$push,只是一次可以追加多个值到一个数组字段内
+$addToSet
+{$addToSet:{field:value}}
+增加一个值到数组内，而且只有当这个值不在数组内才增加
+
+删除记录(remove)
+db.user.remove({email:'aa'})
+db.user.remove({email:'aa'},1)  //只删除一条
+db.user.remove({})  //全部清空
+
+update操作符删除
+$pop
+删除数组内的一个值
+删除最后一个值 {$pop:{field:1}}
+删除第一个值  {$pop:{field:-1}}
+
+$pull
+{$pull:{field:value}}
+从数组field内删除一个等于value的值
+
+$pullAll
+{$pullAll:{field:value_array}}
+同$pull，可以一次删除数组内多个值
+db.test.update({_id:5},{$pullAll:{test1:['ccc','ffff']}})
+
+$ 操作符
+代表安条件找出的数组里面某项它自己
+需要注意的是，如果后面不跟{multi:true}，$只会应用找到的第一条数据项，后面的就不管了
+
+查询数据
+db.user.find()
+db.user.find().pretty() //格式化，输出格式比较公正好看一点
+db.user.findOne() //只查询碰到的第一条
+db.user.find()[0] //只查询碰到的第一条,更灵活点，可以查第几条
+
+db.mycol.count()    //查看有几条记录
+db.mycol.count({age:20})    //age为20的有几条数据
+db.mycol.find({},{name:1,age:1})    //1为显示，0为不显示，查询mycol所有记录，只显示name和age字段，但是此时_id是显示的
+db.mycol.find({},{name:1,age:1,_id:0})    //只显示name和age，_id是不显示的
+
+db.mycol.find({'likes':{$lt:50}}).pretty()  //查出likes小于50的
+<   $lt     小于
+<=  $lte    小于等于
+>   $gt     大于
+>=  $gte    大于等于
+!=  $ne     不等于
+db.user.find({money:{$lt:80,$gt:20}})   //money大于20小于80
+
+多条件查询and
+db.user.find({key1:value1,key2:value2}).pretty()    //如果两个key一样，后面的会覆盖前面的
+多条件查询or
+db.mycol.find({$or:[{key1:value1},{key2:value2}]}).pretty()
+多条件查询and和or一起用
+db.mycol.find({'likes':{$gt:10},{$or:[key1:value1,key2:value2]}})
+
+db.user.find({pwd:/li/}).pretty()   //查询出pwd里面包含li的所有记录，大小写敏感
+db.user.find({pwd:/li/i}).pretty()   //查询出pwd里面包含li的所有记录,忽略大小写，主要针对英文的
+db.user.find({'by':{$regex:/or.*/i}})   //包含or的，忽略大小写
+db.user.find({'by':/^tut/i})   //tut打头的，忽略大小写
+
+分页（limit）
+db.COLLECTION_NAME.find().limit(NUMBER)
+db.mycol.find().limit(3)
+db.mycol.find({},{'title':1,_id:0}).limit(1).skip(3)    //跳到第三条记录，向后显示1条
+db.mycol.find({},{'title':1,_id:0}).skip(3)    //跳到第三条记录，向后显示所有记录
+
+降序排序
+db.mycol.find({},{title:1,_id:0}).sort({'title':-1})    //1用于升序排序，而-1用于降序
+
+php查询方法
+$paramArr = array(
+    "nicheng"=>new MongoRegex("/.*".$_POST["nicheng"].".*/")
+)
