@@ -163,3 +163,266 @@ php查询方法
 $paramArr = array(
     "nicheng"=>new MongoRegex("/.*".$_POST["nicheng"].".*/")
 )
+
+
+聚合查询
+$match:匹配条件，可选，过滤条件
+$limit:结果条数，可选
+$group:聚合规则
+$sort:对查询结果排序，-1表示降序
+
+1 每个学生参考几门
+db.course.aggregate([{$group:{_id:"$uid",科目数:{$sum:1}}},{$sort:{_id:-1}}])
+
+2 每个学生的总成绩
+db.course.aggregate([{$group:{_id:{uid:'$uid',姓名:'$name'},参考门数:{$sum:1},总成绩:{$sum:'$score'}}},{$sort:{_id:1}}])
+
+3 平均成绩
+db.course.aggregate([{$group:{_id:{uid:"$uid",姓名:"$name"},参考门数:{$sum:1},总分:{$sum:'$score'},平均分:{$avg:'$score'}}},{$score:{_id:1}}])
+查询结果如下：
+{"id":{uid:1,"姓名":"张三"},"参考门数":4,"总分":278,"平均分":69.5}
+{"id":{uid:2,"姓名":"李四"},"参考门数":5,"总分":331,"平均分":66.2}
+{"id":{uid:3,"姓名":"王五"},"参考门数":5,"总分":383,"平均分":76.6}
+
+4 每个及格的学生的平均成绩
+{$match:{score:{$gte:60,$lt:90}}}
+先过滤再统计
+db.course.aggregate([{$match:{score:{$gte:60,$lt:90}}},{$group:{_id:{uid:"$uid",姓名:"$name"},参考门数:{$sum:1},总分:{$sum:'$score'},平均分:{$avg:'$score'}}},{$score:{_id:1}}])
+
+只显示两条
+db.course.aggregate([{$match:{score:{$gte:60,$lt:90}}},{$group:{_id:{uid:"$uid",姓名:"$name"},参考门数:{$sum:1},总分:{$sum:'$score'},平均分:{$avg:'$score'}}},{$score:{_id:1}},{$limit:2}])
+跳过一条向下显示两条
+db.course.aggregate([{$match:{score:{$gte:60,$lt:90}}},{$group:{_id:{uid:"$uid",姓名:"$name"},参考门数:{$sum:1},总分:{$sum:'$score'},平均分:{$avg:'$score'}}},{$score:{_id:1}},{$skip:1},{$limit:2}])
+
+参数：
+$sum 总结从集合中的所有文件所定义的值.
+$avg 从所有文档集合中所有给定值计算的平均.
+$min 获取集合中的所有文件中的相应值最小.
+$max 获取集合中的所有文件中的相应值的最大.
+$push 值插入到一个数组生成文档中. db.mycol.aggregate([{$group : {_id : "$by_user", url : {$push: "$url"}}}])
+$addToSet 值插入到一个数组中所得到的文档，但不会创建重复. db.mycol.aggregate([{$group : {_id : "$by_user", url : {$addToSet : "$url"}}}])
+$first 根据分组从源文档中获取的第一个文档。通常情况下，这才有意义，连同以前的一些应用 “$sort”-stage. db.mycol.aggregate([{$group : {_id : "$by_user", first_url : {$first : "$url"}}}])
+$last 根据分组从源文档中获取最后的文档。通常，这才有意义，连同以前的一些应用 “$sort”-stage. db.mycol.aggregate([{$group : {_id : "$by_user", last_url : {$last : "$url"}}}])
+
+
+创建索引
+db.mycol.ensureIndex({"title":1})   //1是按升序排列
+//mongodb会为我们去一个默认的名字，规则为keyname1_dir1_keyname2_dir2...keynameN_dirN
+
+查看我们创建的索引
+db.system.indexes.find()
+
+删除索引
+db.runCommand({"dropIndexes":"user","index":"IX_name"})
+
+多字段索引
+db.mycol.ensureIndex({"title":1,"description":1})
+
+唯一索引
+db.user.ensureIndex({"name":1},{unique:true})
+db.user.ensureIndex({email:1},{unique:true,name:'email_uiq'})
+
+联合唯一索引
+db.user.ensureIndex({uid:1,cid:1},{unique:true,name:"uid_cid_unique"})
+
+
+存储过程
+保存为存储过程：    
+db.system.js.save({_id:存储过程名称,value:存储过程体}) //添加一个新的存储过程或者更新一个已经存在的存储过程    
+
+db.system.js.insert({_id:'add',value:function(a,b){
+    return a+b*2;
+}})
+
+db.system.js.save({_id:'add',value:function(a,b){
+    return a+b;
+}})
+
+查看存储过程
+db.system.js.find()
+
+db.eval("add(9,3)") //函数名，参数
+
+WARNING:db.eval() is deprecated //这方法新版已经弃用了
+
+删除存储过程
+db.system.js.remove({_id:'add'})
+
+//--------------------临时数据----------------------------
+db.user.insert({name:'张三',birthday:new Date(1990,6,7)})
+db.user.insert({name:'李四',birthday:new Date(1997,3,5)})
+db.user.insert({name:'王五',birthday:new Date(1989,4,20)})
+db.user.insert({name:'周六',birthday:new Date(1992,5,9)})
+db.user.insert({name:'蒋七',birthday:new Date(1994,8,7)})
+
+db.user.find()
+
+存储过程最高支持es5的写法
+
+//加载文件
+load('g:/data/storepro.js')
+db.system.js.find()
+db.user.find()
+//调用
+getUserRS = db.eval('getUserRS')
+getUserRS(db.user.find())
+
+备份和恢复
+
+一 备份数据库
+新建文件夹G:/mongodata/back
+cd D:\Program Files\MongoDB 2.6 Standard\bin
+mongodump -d mydb -o g:/mongodata/back
+
+mongodump -h IP --port 端口 -u 用户名 -p 密码 -d 数据库 -o 文件要存的路径
+如果没有用户，可以去掉-u和-p。
+如果导出本机的数据库，可以去掉-h。
+如果是默认端口，可以去掉--port。
+如果想导出所有数据库，可以去掉-d。
+
+导出所有数据库(以下的是linux的路径格式，windows环境类似)
+命令：mongodump -h 127.0.0.1 -o /home/draven/mongodb/
+
+导出指定数据库
+mongodump -h 192.168.1.108 -d tank -o /home/draven/mongodb/
+
+二 mongorestore还原数据库
+1,常用命令格式
+ mongorestore -h IP --port 端口 -u 用户名 -p 密码 -d 数据库 --drop 文件存在路径 
+ --drop的意思是，先删除所有的记录，然后恢复。
+  mongorestore /home/draven/mongodb/  #这里的路径是所有库的备份
+
+D:\Program Files\MongoDB 2.6 Standard\bin>mongorestore -d mydb1 --dir g:/data/back/mydb
+
+2,恢复所有数据库到mongodb中
+mongorestore /home/draven/mongodb/  #这里的路径是所有库的备份
+
+3,还原指定的数据库
+D:\Program Files\MongoDB 2.6 Standard\bin>mongorestore -d mydb1 --dir g:/data/back/mydb
+mydb1是新的数据库名称，mydb是备份目录中的mydb的数据库的文件夹
+
+？？不明白的
+mongorestore -d tank /home/draven/mongodb/tank/  #tank这个数据库的备份路径
+mongorestore -d tank_new /home/draven/mongodb/tank/  #将tank还有tank_new数据库中
+
+三 mongoexport导出表，或者表中部分字段
+mongoexport -h IP --port 端口 -u 用户名 -p 密码 -d 数据库 -c 表名 -f 字段 -q 条件导出 --csv -o 文件名 
+
+上面的参数好理解，重点说一下：
+-f    导出指字段，以字号分割，-f name,email,age导出name,email,age这三个字段
+-q    可以根据查询条件导出，-q '{ "uid" : "100" }' 导出uid为100的数据
+--csv 表示导出的文件格式为csv的，这个比较有用，因为大部分的关系型数据库都是支持csv，在这里有共同点
+
+导出整张表
+mongoexport -d tank -c users -o /home/zhangy/mongodb/tank/users.dat
+
+根据条件导出数据
+mongoexport -d tank -c users -q '{uid:{$gt:1}}' -o tank/users.json
+
+四 mongoimport导入表，或者表中部分字段
+
+还原整表导出的非csv文件
+mongoimport -h IP --port 端口 -u 用户名 -p 密码 -d 数据库 -c 表名 --upsert --drop 文件名  
+重点说一下--upsert，其他参数上面的命令已有提到，--upsert 插入或者更新现有数据
+
+还原部分字段的导出文件
+mongoimport -h IP --port 端口 -u 用户名 -p 密码 -d 数据库 -c 表名 --upsertFields 字段 --drop 文件名  
+--upsertFields根--upsert一样
+
+还原导出的csv文件
+mongoimport -h IP --port 端口 -u 用户名 -p 密码 -d 数据库 -c 表名 --type 类型 --headerline --upsert --drop 文件名  
+
+还原导出的表数据
+mongoimport -d tank -c users --upsert tank/users.dat
+
+部分字段的表数据导入
+mongoimport -d tank -c users  --upsertFields uid,name,sex  tank/users.dat 
+
+还原csv文件
+mongoimport -d tank -c users --type csv --headerline --file tank/users.csv
+
+
+应用
+Express中操作mongodb
+1.npm install mongodb --save-dev
+2.打开dos窗口:启动mongodb      
+D:\Program Files\MongoDB 2.6 Standard\bin>mongod.exe --dbpath "G:\mongodata\db"
+mongoose连接mongodb
+Mongoose库简而言之就是在node环境中操作MongoDB数据库的一种便捷的封装，一种对象模型工具，增加里一些api，类似ORM
+1.安装      
+npm install mongoose --save-dev      
+2.mongoose.js
+sails中操作mongodb
+1.创建项目：  
+G:\www\nodejs\sails>sails new blog  
+G:\www\nodejs\sails\blog>npm install sails-mongo --save-dev
+2.config/connections.js中
+someMongodbServer: {
+    adapter: 'sails-mongo',
+        host: 'localhost',
+            port: 27017,
+                // user: 'username',  
+                // password: 'password',  
+                database: 'segment'
+},  
+  
+3.config/models.js中
+connection: 'someMongodbServer',
+    migrate: 'safe'
+
+4.models/User.js
+module.exports = {
+    tableName: 'user',
+    adapter: 'sails-mongo',
+    autoCreatedAt: false,
+    autoUpdatedAt: false,
+    attributes: {
+        id: { columnName: '_id' }, email: {}, pwd: {}, nicheng: {}, updtime: {}, createtime: {},
+    }
+};
+
+5.api/controllers/UserController.js
+User = require('../models/User');
+function formatDate(date) {
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+module.exports = {
+    /**  
+     * `UsersController.zhuce()`  
+     */
+    zhuce: function (req, res) {
+        var user = { id: 2, email: 'cc', pwd: 'cc', nicheng: '王五' };
+        user.createtime = formatDate(new Date());
+        User.create(user).exec(function (err, created) {
+            if (err) {
+                var errStr = err.message;
+                res.send(errStr);
+                return;
+            }
+            res.send("注册成功");
+        })
+    },
+    login: function (req, res) {
+        /*  
+        User.find({email:'aa',pwd:'aa'},function(err,rs){  
+            console.log(rs);  
+            res.send('查到:'+rs);  
+        });  
+        */
+        User.findOne({ email: 'aa', pwd: 'aa' }, function (err, rs) {
+            console.log(rs);
+            res.send('查到:' + rs);
+        });
+    }
+};
+
+6.启动Mongodb服务  
+D:\Program Files\MongoDB 2.6 Standard\bin> mongod.exe --dbpath "G:\mongodata\db"
+  
+7.启动Mongodb管理器  
+D:\Program Files\MongoDB 2.6 Standard\bin> mongo.exe
+
+8.启动sails: sails lift  
+  
+9.访问: http://localhost:1337/user/zhuce
+nodejs调用mongodb存储过程
